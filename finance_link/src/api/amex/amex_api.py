@@ -6,6 +6,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import StaleElementReferenceException
+
 from openpyxl import load_workbook
 import os
 from time import sleep
@@ -34,8 +37,20 @@ class amexDriver:
         self.driver = webdriver.Chrome(service = Service(ChromeDriverManager().install()), options = self.options)
         self.driver.get('https://www.americanexpress.com/en-us/account/login?inav=iNavLnkLog')
 
-        self.wait = WebDriverWait(self.driver, 30)
+        self.wait = WebDriverWait(self.driver, 60)
 
+        return
+    
+    def waitClick(self, newBy, newValue):
+
+        ignored_exceptions=(NoSuchElementException,StaleElementReferenceException)
+        button = WebDriverWait(self.driver, 10, ignored_exceptions=ignored_exceptions) \
+            .until(EC.presence_of_element_located((newBy, newValue)))
+
+        # self.wait.until(EC.element_to_be_clickable((newBy, newValue)))
+        # button = self.driver.find_element(by = newBy, value = newValue)
+        self.driver.execute_script("arguments[0].click();", button)
+        
         return
     
     def prepareDownloadDir(self):
@@ -59,23 +74,20 @@ class amexDriver:
         usernameInput.send_keys(os.getenv("AMEX_USERNAME")) # HIDE PERSONAL INFORMATION
         passwordInput.send_keys(os.getenv("AMEX_PASSWORD")) # HIDE PERSONAL INFORMATION
         
-        loginBtn = self.driver.find_element(by = By.ID, value="loginSubmit")
-        loginBtn.click()
+        self.waitClick(By.ID, "loginSubmit")
 
         return
 
     def getActivity(self):
-        # Navigate to 'Statements & Activity' page
-        statementActivityBtn = self.wait.until(EC.presence_of_element_located((By.XPATH, "//a[@title='Statements & Activity']")))
-        statementActivityBtn.click()
+        self.waitClick(By.XPATH,  "//a[@title='Statements & Activity']")
 
-        # Click on the 'account switcher' button
-        accountToggleBtn = self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "account-switcher-toggler")))
-        accountToggleBtn.click()
+        self.waitClick(By.CLASS_NAME,  "account-switcher-toggler")
 
         # Acquire the lsit of credit accounts on the AMEX profile
+        # self.waitClick(By.ID,  "switcher_product_rows")
+
         accountToggleList = self.driver.find_element(by = By.ID, value="switcher_product_rows")
-        accountList = accountToggleList.find_elements(By.CSS_SELECTOR, 'li');
+        accountList = accountToggleList.find_elements(By.CSS_SELECTOR, 'li')
 
         if not accountList:
             print("ERROR") # Handle Error
@@ -85,22 +97,18 @@ class amexDriver:
 
         for i in range(self.numOfAccounts):
             if i != 0:
-                accountToggleBtn = self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "account-switcher-toggler")))
-                accountToggleBtn.click()
+                self.waitClick(By.CLASS_NAME,  "account-switcher-toggler")
 
+                # Special case
                 accountToggleList = self.driver.find_element(by = By.ID, value="switcher_product_rows")
-                accountList = accountToggleList.find_elements(By.CSS_SELECTOR, 'li');
-
-            accountList[i].click()
+                accountToggleList.find_elements(By.CSS_SELECTOR, 'li')[i].click()
             print(f"Getting activity from account {i + 1}")
 
             # Click on the 'download activity' button
-            downloadModalBtn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//i[@class='btn btn-icon transparent icon dls-icon-download icon-hover margin-2-l-md-up dls-bright-blue ']")))
-            downloadModalBtn.click()
+            self.waitClick(By.XPATH,  "//i[@class='btn btn-icon transparent icon dls-icon-download icon-hover margin-2-l-md-up dls-bright-blue ']")
+            self.waitClick(By.XPATH,  "//label[@for='axp-activity-download-body-selection-options-type_excel']")
 
             # Select the 'excel' and 'select all' toggles
-            excelOption = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//label[@for='axp-activity-download-body-selection-options-type_excel']")))
-            excelOption.click()
 
             allOption = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//label[@for='axp-activity-download-body-checkbox-options-includeAll']")))
 
@@ -108,8 +116,7 @@ class amexDriver:
                 allOption.click()
             
             # Click on the 'download' button
-            downloadBtn = self.driver.find_element(by = By.XPATH, value="//a[@label='Download']")
-            downloadBtn.click()
+            self.waitClick(By.XPATH,  "//a[@label='Download']")
 
             # sleep(0.5)
         return
